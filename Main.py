@@ -9,20 +9,12 @@ vK8FXz+w~UxHR2L
 """
 
 
-from re import M
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.edge.options import Options
-from selenium.webdriver.edge.service import Service as EdgeService
-from webdriver_manager.microsoft  import EdgeChromiumDriverManager
-import pandas as pd
 import sys
 import time
 from datetime import datetime
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, QAction
 from PySide6.QtCore import Slot, Qt, QThread, Signal, QEvent
-import qdarktheme
 import requests
 import smtplib
 from email.mime.text import MIMEText
@@ -36,6 +28,12 @@ class Worker(QThread):
 
   def __init__(self, parent=None):
     super(Worker, self).__init__(parent)
+
+  def stop_self(self):
+        self.terminate()
+        message = f'{datetime.now()} - 进程已终止...'
+        self.sinOut.emit(message)
+        
 
   def getdata(self, year, month, user, pwd, rec, chk_dld, once):
     self.year = year
@@ -89,7 +87,7 @@ class Worker(QThread):
   def to_unicode(self, supplier):
     ret = ''
     for v in supplier:
-        ret = ret + hex(ord(v)).upper().replace('0X', '\\\\u')
+        ret = ret + hex(ord(v)).upper().replace('0X', '\\u')
 
     return ret
 
@@ -108,6 +106,7 @@ class Worker(QThread):
                     '</IPO0704GetInfo>' \
                     '</s:Body>' \
                     '</s:Envelope>' 
+        print(body.encode("utf-8"))            
         r = requests.post(url, data=body.encode("utf-8"))
         print(r.text)
 
@@ -152,9 +151,11 @@ class MyWidget(QWidget):
         
         self.fld_user = QLabel('用户名:')
         self.line_user = QLineEdit()
+        self.line_user.setClearButtonEnabled(True)
         self.line_user.setText("3334A01")  ##测试
         self.fld_pwd = QLabel('密码:')
         self.line_pwd = QLineEdit()
+        self.line_pwd.setClearButtonEnabled(True)
         self.line_pwd.setText("123456")  ##测试
         self.line_pwd.setEchoMode(QLineEdit.PasswordEchoOnEdit)
         
@@ -182,6 +183,7 @@ class MyWidget(QWidget):
         
         self.fld_email = QLabel('收件人:')
         self.line_email = QLineEdit()
+        self.line_email.setClearButtonEnabled(True)
         self.line_email.setPlaceholderText("多个收件人之间用分号;分开") 
         self.line_email.setText("tankren@qq.com;tankrenlive@gmail.com")  ##测试
         self.line_email.editingFinished.connect(self.check_email)
@@ -199,6 +201,8 @@ class MyWidget(QWidget):
 
         self.btn_reset = QPushButton('清空日志')
         self.btn_reset.clicked.connect(self.reset_log)
+        self.btn_stop = QPushButton('终止进程')
+        self.btn_stop.clicked.connect(self.stop_thread)
 
         self.layout = QGridLayout()
         self.layout.addWidget((self.fld_user), 0, 0)
@@ -207,21 +211,22 @@ class MyWidget(QWidget):
         self.layout.addWidget((self.line_pwd), 0, 3)        
         self.layout.addWidget((self.fld_year), 0, 4)
         self.layout.addWidget((self.cb_year), 0, 5)
-        self.layout.addWidget((self.fld_month), 0, 6)
-        self.layout.addWidget((self.cb_month), 0, 7)
+        self.layout.addWidget((self.fld_month), 1, 4)
+        self.layout.addWidget((self.cb_month), 1, 5)
         self.layout.addWidget((self.fld_email), 1, 0)
         self.layout.addWidget((self.line_email), 1, 1, 1, 3)
-        self.layout.addWidget((self.fld_sch), 1, 4)
-        self.layout.addWidget((self.time_sch), 1, 5)
-        self.layout.addWidget((self.chk_dld), 1, 7)
+        self.layout.addWidget((self.fld_sch), 0, 6)
+        self.layout.addWidget((self.time_sch), 0, 7)
+        self.layout.addWidget((self.chk_dld), 1, 6)
 
 
         self.layout.addWidget((self.line), 2, 0, 1, 8)
         self.layout.addWidget((self.fld_result), 3, 0)
-        self.layout.addWidget((self.text_result), 4, 0, 5, 6)
+        self.layout.addWidget((self.text_result), 4, 0, 6, 6)
         self.layout.addWidget((self.btn_start), 5, 6, 1, 2)
         self.layout.addWidget((self.btn_schedule), 6, 6, 1, 2)
         self.layout.addWidget((self.btn_reset), 7, 6, 1, 2)
+        self.layout.addWidget((self.btn_stop), 8, 6, 1, 2)
 
         self.setLayout(self.layout)
         
@@ -261,6 +266,11 @@ class MyWidget(QWidget):
     def Addmsg(self, message):
         self.text_result.appendPlainText(message)
 
+    def stop_thread(self):
+        confirm = QMessageBox.question(self, "警告", "是否终止进程? ", QMessageBox.Yes | QMessageBox.No)
+        if(confirm == QMessageBox.Yes):
+            self.thread.stop_self()
+
     def get_year_month(self):
         year = str(self.cb_year.currentText())
         month = str(self.cb_month.currentText())
@@ -282,7 +292,7 @@ class MyWidget(QWidget):
             chk_dld = '1'
         else:
             chk_dld = '0'      
-        if user == '' or user == '':
+        if user == '' or pwd == '':
             self.msgbox('error', '请输入用户名和密码!! ')
         else:
             if not rec == '':
@@ -317,6 +327,7 @@ def main():
     else:
         app = QApplication.instance()
     #app.setStyleSheet(qdarktheme.load_stylesheet(border="rounded"))
+    app.setStyle("fusion")
     font = QFont()
     font.setFamily("Microsoft YaHei")
     font.setPointSize(10)
