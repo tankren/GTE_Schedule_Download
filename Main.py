@@ -26,7 +26,10 @@ import qdarktheme
 import requests
 import smtplib
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 import re
+import os
 
 class Worker(QThread):
   sinOut = Signal(str)
@@ -34,59 +37,96 @@ class Worker(QThread):
   def __init__(self, parent=None):
     super(Worker, self).__init__(parent)
 
-  def getdata(self, year, month, user, pwd, email, chk_dld, once):
+  def getdata(self, year, month, user, pwd, rec, chk_dld, once):
     self.year = year
     self.month = month
     self.user = user
     self.pwd = pwd
-    self.email = email
+    self.rec = rec
     self.chk_dld = chk_dld
     self.once = once
   
   def send_mail(self):
     mail_host = 'smtp.163.com'
     mail_user = 'vhcn_lop@163.com'
-    mail_pass = 'vK8FXz+w~UxHR2L'   
+    mail_pass = 'YQXQMPJDDTSOJLOC'   
     #邮件发送方邮箱地址
     sender = 'vhcn_lop@163.com'  
     #邮件接受方邮箱地址，注意需要[]包裹，这意味着你可以写多个邮件地址群发
-    receivers = self.email
-
+    receivers = self.rec
     #设置email信息
     #邮件内容设置
-    message = MIMEText('content','plain','utf-8')
+    email = MIMEMultipart()
+    email_content = "Dear all,\n\t附件为每周数据，请查收！\n\nBI团队"
+    email.attach(MIMEText('email_content ', 'plain', 'utf-8'))
     #邮件主题  
-    message['Subject'] = f'NO-REPLY: {}内示下载结果' 
+    time = datetime.now().isoformat(' ', 'seconds')
+    email['Subject'] = f'no-reply: {time} GTE内示下载结果' 
     #发送方信息
-    message['From'] = sender 
+    email['From'] = sender 
     #接受方信息     
-    message['To'] = receivers[0] 
+    email['To'] = receivers
+    folder = 'c:\\temp'
+    file_list = [f for f in os.listdir(folder) if f.endswith('.xlsx')]
+    for file in file_list:
+        part = MIMEApplication(open(f'{folder}\\{file}', 'rb').read())
+        part.add_header('Content-Disposition', 'attachment', filename=file)
+        email.attach(part)
     try:
-        smtpObj = smtplib.SMTP() 
-        #连接到服务器
-        smtpObj.connect(mail_host,25)
+        smtpObj = smtplib.SMTP_SSL(mail_host, 465)
         #登录到服务器
         smtpObj.login(mail_user,mail_pass) 
         #发送
         smtpObj.sendmail(
-            sender,receivers,message.as_string()) 
+            sender,receivers.split(';'),email.as_string()) 
         #退出
         smtpObj.quit() 
-        print('success')
+        message = f'{datetime.now()} - 邮件发送成功...'
+        self.sinOut.emit(message)
     except smtplib.SMTPException as e:
-        print('error',e) #打印错误
+        print('错误',e) #打印错误
+
+  def to_unicode(self, supplier):
+    ret = ''
+    for v in supplier:
+        ret = ret + hex(ord(v)).upper().replace('0X', '\\\\u')
+
+    return ret
+
+  def POST(self):
+        supplier = self.to_unicode(self.user[0:5])
+        ym = self.year+self.month
+        url = 'http://192.168.10.33/slcontainer/web.csv'
+        body = '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">' \
+                    '<s:Body>' \
+                    '<IPO0704GetInfo xmlns="SysManager">' \
+                    '<pagerinfo xmlns:d4p1="http://schemas.datacontract.org/2004/07/Silverlight.BaseDTO.Entities" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">' \
+                    '<d4p1:pageIndex>1</d4p1:pageIndex>' \
+                    '<d4p1:pageSize>10</d4p1:pageSize>' \
+                    '</pagerinfo>' \
+                    f'<parm>{{"SupplierNum":"{supplier}","InshowYM":"{ym}","Check":"{self.chk_dld}"}}</parm>' \
+                    '</IPO0704GetInfo>' \
+                    '</s:Body>' \
+                    '</s:Envelope>' 
+        r = requests.post(url, data=body.encode("utf-8"))
+        print(r.text)
+
+  def download(self):
+        pass
+
   def run(self):
     #主逻辑
-    if self.once == '0':
+    if self.once == '1':
         try:
-            message = f'{datetime.now()} - 获取未下载文件清单...'
+            message = f'{datetime.now()} - 获取Excel文件清单...'
             self.sinOut.emit(message)
 
-            message = 'DONE'
+            self.POST()
+            message = f'{datetime.now()} - 获取结束, 发送邮件...'
             self.sinOut.emit(message)
-
-        except Exception:
-            message = f'{datetime.now()} - 获取失败, 请确认VPN连接是否正常! '
+            self.send_mail()
+        except Exception as e:
+            message = f'{datetime.now()} - {e} '
             self.sinOut.emit(message)
     else:
         try:
@@ -112,8 +152,10 @@ class MyWidget(QWidget):
         
         self.fld_user = QLabel('用户名:')
         self.line_user = QLineEdit()
+        self.line_user.setText("3334A01")  ##测试
         self.fld_pwd = QLabel('密码:')
         self.line_pwd = QLineEdit()
+        self.line_pwd.setText("123456")  ##测试
         self.line_pwd.setEchoMode(QLineEdit.PasswordEchoOnEdit)
         
         self.fld_year = QLabel('年份:')
@@ -126,7 +168,7 @@ class MyWidget(QWidget):
         self.fld_month = QLabel('月份:')
         self.cb_month = QComboBox()
         self.cb_month.addItems(['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'])
-        m = datetime.today().month
+        m = datetime.today().strftime('%m')
         self.cb_month.setCurrentText(str(m))
         self.cb_month.currentTextChanged[str].connect(self.get_year_month)
 
@@ -138,8 +180,10 @@ class MyWidget(QWidget):
         self.fld_sch = QLabel('定时任务时间:')
         self.time_sch = QTimeEdit()
         
-        self.fld_email = QLabel('收件邮箱地址:')
+        self.fld_email = QLabel('收件人:')
         self.line_email = QLineEdit()
+        self.line_email.setPlaceholderText("多个收件人之间用分号;分开") 
+        self.line_email.setText("tankren@qq.com;tankrenlive@gmail.com")  ##测试
         self.line_email.editingFinished.connect(self.check_email)
         
         self.fld_result = QLabel('运行日志:')
@@ -207,16 +251,15 @@ class MyWidget(QWidget):
 
     def check_email(self):
         if not self.line_email.text() == '':
-            if not re.match(r'^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+){0,4}@[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+){0,4}$', self.line_email.text()):
-                self.msgbox('error', '邮箱格式错误, 请重新输入 !')
-                self.line_email.setText('')
-                self.line_email.setFocus() 
+            email_list = self.line_email.text().split(';')
+            for email in email_list:
+                if not re.match(r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)", email):
+                    self.msgbox('error', '邮箱格式错误, 请重新输入 !')
+                    self.line_email.setText('')
+                    self.line_email.setFocus() 
 
     def Addmsg(self, message):
-        if not message == 'DONE':
-            self.text_result.appendPlainText(message)
-        else:
-            self.msgbox('DONE', '录入完成, 请确认后保存!! ')
+        self.text_result.appendPlainText(message)
 
     def get_year_month(self):
         year = str(self.cb_year.currentText())
@@ -227,12 +270,27 @@ class MyWidget(QWidget):
             self.setWindowTitle(f'{title} - 内示年月: {year}-{month}')
             
     def set_schedule(self):
-        self.line_user.setText('')
-        self.line_pwd.setText('')
-        self.cb_year.setCurrentText('')
-        self.cb_month.setCurrentText('')
-        self.text_result.clear()
-        self.btn_start.setEnabled(False)
+        print()
+    
+    def execute_once(self):
+        year = str(self.cb_year.currentText())
+        month = str(self.cb_month.currentText())
+        user = str(self.line_user.text())
+        pwd = str(self.line_pwd.text())
+        rec = str(self.line_email.text())
+        if self.chk_dld.isChecked():
+            chk_dld = '1'
+        else:
+            chk_dld = '0'      
+        if user == '' or user == '':
+            self.msgbox('error', '请输入用户名和密码!! ')
+        else:
+            if not rec == '':
+                self.thread.getdata(year, month, user, pwd, rec, chk_dld, '1')
+                self.thread.start()
+            else:
+                self.msgbox('error', '请输入邮箱地址!! ')
+
 
     def msgbox(self, title, text):
         tip = QMessageBox(self)
@@ -252,22 +310,6 @@ class MyWidget(QWidget):
         confirm = QMessageBox.question(self, "警告", "是否清空日志? ", QMessageBox.Yes | QMessageBox.No)
         if(confirm == QMessageBox.Yes):
             self.text_result.clear()          
-
-    def execute_once(self):
-        year = str(self.cb_year.currentText())
-        month = str(self.cb_month.currentText())
-        user = str(self.line_user.text())
-        pwd = str(self.line_pwd.text())
-        email = str(self.line_email.text())
-        if self.chk_dld.isChecked():
-            chk_dld = '1'
-        else:
-            chk_dld = '0'      
-        if user == '' or user == '':
-            self.msgbox('error', '请输入用户名和密码!! ')
-        else:
-            self.thread.getdata(year, month, user, pwd, email, chk_dld, '0')
-            self.thread.start()
 
 def main():
     if not QApplication.instance():
