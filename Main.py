@@ -32,21 +32,7 @@ from PySide6.QtGui import QFont, QAction
 from PySide6.QtCore import Slot, Qt, QThread, Signal, QEvent
 import qdarktheme
 import socket
-
-opt = Options()
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-port = ("localhost", 9333)
-open = sock.connect_ex(port)
-if open == 0:
-    opt.add_experimental_option("debuggerAddress", "localhost:9333")
-else:
-    opt.add_argument("--remote-debugging-port=9333")
-    opt.add_argument("--start-maximized")
-    opt.add_argument('user-data-dir=C:\\selenium\\EdgeProfile')
-##driver_path = ChromeService(r'./chromedriver.exe')
-##driver = webdriver.Chrome(service=driver_path, options=opt)
-driver = webdriver.ChromiumEdge(service=EdgeService(EdgeChromiumDriverManager().install()), options=opt)
-driver.set_page_load_timeout(5)
+import requests
 
 class Worker(QThread):
   sinOut = Signal(str)
@@ -63,24 +49,15 @@ class Worker(QThread):
   def run(self):
     #主逻辑
     try:
-        message = f'{datetime.now()} - 打开网站并自动登录...'
+        message = f'{datetime.now()} - 获取未下载文件清单...'
         self.sinOut.emit(message)
-        
-        message = f'{datetime.now()} - 开始录入发票...'
-        self.sinOut.emit(message)
-        iframe = driver.find_element(By.XPATH, '//iframe[@id="layui-layer-iframe1"]')
-        driver.switch_to.frame("layui-layer-iframe1")
 
-        
-        self.sinOut.emit(message)
         message = 'DONE'
         self.sinOut.emit(message)
 
     except Exception:
-        driver.execute_script('window.stop()')
-        message = f'{datetime.now()} - 网页无法加载, 请确认VPN连接是否正常! '
+        message = f'{datetime.now()} - 获取失败, 请确认VPN连接是否正常! '
         self.sinOut.emit(message)
-        #driver.quit()
 
 class MyWidget(QWidget):
     def __init__(self, parent=None):
@@ -98,25 +75,28 @@ class MyWidget(QWidget):
         self.tray.setToolTip(f'{title} 正在后台运行')
         self.tray.activated.connect(self.on_systemTrayIcon_activated)
         
-        self.fld_user= QLabel('用户名:')
+        self.fld_user = QLabel('用户名:')
         self.line_user = QLineEdit()
-        self.fld_pwd= QLabel('密码:')
+        self.fld_pwd = QLabel('密码:')
         self.line_pwd = QLineEdit()
         self.line_pwd.setEchoMode(QLineEdit.PasswordEchoOnEdit)
         
-        self.fld_year= QLabel('年份:')
-        self.cb_year= QComboBox()
+        self.fld_year = QLabel('年份:')
+        self.cb_year = QComboBox()
         y = datetime.today().year
         self.cb_year.addItems(['', str(y-1), str(y), str(y+1)])
         self.cb_year.setCurrentText(str(y))
         self.cb_year.currentTextChanged[str].connect(self.get_year_month)
 
-        self.fld_month= QLabel('月份:')
+        self.fld_month = QLabel('月份:')
         self.cb_month = QComboBox()
         self.cb_month.addItems(['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'])
         m = datetime.today().month
         self.cb_month.setCurrentText(str(m))
         self.cb_month.currentTextChanged[str].connect(self.get_year_month)
+
+        self.fld_downloaded = QLabel('考虑已下载')
+        self.chk_downloaded = QCheckBox()
 
         self.btn_start = QPushButton('开始')
         self.btn_start.clicked.connect(self.execute)
