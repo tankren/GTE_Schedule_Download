@@ -1,0 +1,11 @@
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+    <s:Body>
+      <IPO0704GetInfo xmlns="SysManager">
+        <pagerinfo xmlns:d4p1="http://schemas.datacontract.org/2004/07/Silverlight.BaseDTO.Entities" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+          <d4p1:pageIndex>1</d4p1:pageIndex>
+          <d4p1:pageSize>10</d4p1:pageSize>
+        </pagerinfo>
+        <parm>{"SupplierNum":"\\u33\\u33\\u33\\u34\\u41","InshowYM":"202207","Check":"0"}</parm>
+      </IPO0704GetInfo>
+    </s:Body>
+  </s:Envelope>
