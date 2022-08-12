@@ -12,6 +12,7 @@ vK8FXz+w~UxHR2L
 import sys
 import time
 from datetime import datetime
+from tokenize import Triple
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, QAction
 from PySide6.QtCore import Slot, Qt, QThread, Signal, QEvent
@@ -23,6 +24,7 @@ from email.mime.application import MIMEApplication
 import re
 import os
 from lxml import etree
+import schedule
 
 class Worker(QThread):
   sinOut = Signal(str)
@@ -41,7 +43,7 @@ class Worker(QThread):
         message = f'{datetime.now()} - 进程已终止...'
         self.sinOut.emit(message)
         
-  def getdata(self, year, month, user, pwd, rec, chk_dld, once):
+  def getdata(self, year, month, user, pwd, rec, chk_dld, once, timer):
     self.year = year
     self.month = month
     self.user = user
@@ -49,6 +51,7 @@ class Worker(QThread):
     self.rec = rec
     self.chk_dld = chk_dld
     self.once = once
+    self.timer = timer
   
   def send_mail(self):
     mail_host = 'smtp.163.com'
@@ -147,25 +150,43 @@ class Worker(QThread):
             except Exception as e:
                 message = f'{datetime.now()} - {e}'
                 self.sinOut.emit(message)
+  def chain(self):
+    message = f'{datetime.now()} - 获取Excel文件清单...'
+    self.sinOut.emit(message)
+    self.post_download()
+    message = f'{datetime.now()} - 获取结束, 发送邮件...'
+    self.sinOut.emit(message)
+    self.send_mail()
+    message = f'{datetime.now()} - 正在结束进程...'
+    self.sinOut.emit(message)
+    self.quit() 
+  
+  def tell_time(self):
+    now = datetime.now()
+    ts = now.strftime('%Y-%m-%d %H:%M:%S')
+    self.sinOut.emit(f'当前时间为{ts}')    
 
   def run(self):
     #主逻辑
     if self.once == '1':
         try:
-            message = f'{datetime.now()} - 获取Excel文件清单...'
-            self.sinOut.emit(message)
-            self.post_download()
-            message = f'{datetime.now()} - 获取结束, 发送邮件...'
-            self.sinOut.emit(message)
-            self.send_mail()
+            self.chain()
         except Exception as e:
             message = f'{datetime.now()} - {e}'
             self.sinOut.emit(message)
+            self.quit()
     else:
         try:
-            message = f'{datetime.now()} - 设置定时任务...'       
-        except Exception:
-            message = f'{datetime.now()} - 错误...'  
+            message = f'{datetime.now()} - 已设置定时任务...每天{self.timer}'  
+            self.sinOut.emit(message)
+            schedule.every().day.at(self.timer).do(self.chain)
+            #schedule.every().hour.do(self.tell_time)
+            while True:
+                schedule.run_pending()
+                time.sleep(1)     
+        except Exception as e:
+            message = f'{datetime.now()} - {e}'  
+            self.sinOut.emit(message)
 
 class MyWidget(QWidget):
     def __init__(self, parent=None):
@@ -209,7 +230,7 @@ class MyWidget(QWidget):
 
         self.chk_dld = QCheckBox('考虑已下载', self)
 
-        self.btn_start = QPushButton('开始单个任务')
+        self.btn_start = QPushButton('运行单次任务')
         self.btn_start.clicked.connect(self.execute_once)
 
         self.fld_sch = QLabel('定时任务时间:')
@@ -220,6 +241,7 @@ class MyWidget(QWidget):
         self.line_email.setClearButtonEnabled(True)
         self.line_email.setPlaceholderText("多个收件人之间用分号;分开") 
         self.line_email.setText("chenlong.ren@cn.bosch.com;feng.he@cn.bosch.com")  ##测试
+        self.line_email.setToolTip(self.line_email.text()) 
         self.line_email.editingFinished.connect(self.check_email)
         
         self.fld_result = QLabel('运行日志:')
@@ -232,7 +254,10 @@ class MyWidget(QWidget):
 
         self.btn_schedule = QPushButton('设置定时任务')
         self.btn_schedule.clicked.connect(self.set_schedule)
-
+        self.btn_cnl_sch = QPushButton('取消定时任务')
+        self.btn_cnl_sch.clicked.connect(self.cancel_schedule)
+        self.btn_cnl_sch.setEnabled(False)
+        
         self.btn_reset = QPushButton('清空日志')
         self.btn_reset.clicked.connect(self.reset_log)
         self.btn_stop = QPushButton('终止进程')
@@ -259,8 +284,9 @@ class MyWidget(QWidget):
         self.layout.addWidget((self.text_result), 4, 0, 6, 6)
         self.layout.addWidget((self.btn_start), 5, 6, 1, 2)
         self.layout.addWidget((self.btn_schedule), 6, 6, 1, 2)
-        self.layout.addWidget((self.btn_reset), 7, 6, 1, 2)
-        self.layout.addWidget((self.btn_stop), 8, 6, 1, 2)
+        self.layout.addWidget((self.btn_cnl_sch), 7, 6, 1, 2)
+        self.layout.addWidget((self.btn_reset), 8, 6, 1, 2)
+        self.layout.addWidget((self.btn_stop), 9, 6, 1, 2)
 
         self.setLayout(self.layout)
         
@@ -295,7 +321,8 @@ class MyWidget(QWidget):
                 if not re.match(r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)", email):
                     self.msgbox('error', '邮箱格式错误, 请重新输入 !')
                     self.line_email.setText('')
-                    self.line_email.setFocus() 
+                    self.line_email.setFocus()         
+        self.line_email.setToolTip(self.line_email.text()) 
 
     def Addmsg(self, message):
         self.text_result.appendPlainText(message)
@@ -314,8 +341,38 @@ class MyWidget(QWidget):
             self.setWindowTitle(f'{title} - 内示年月: {year}-{month}')
             
     def set_schedule(self):
-        print()
-    
+        year = str(self.cb_year.currentText())
+        month = str(self.cb_month.currentText())
+        user = str(self.line_user.text())
+        pwd = str(self.line_pwd.text())
+        rec = str(self.line_email.text())
+        timer = str(self.time_sch.text())
+        if self.chk_dld.isChecked():
+            chk_dld = '1'
+        else:
+            chk_dld = '0'      
+        if user == '' or pwd == '':
+            self.msgbox('error', '请输入用户名和密码!! ')
+        else:
+            if not rec == '':
+                confirm = QMessageBox.question(self, "确认", f"是否设置定时任务: 每天{timer}? ", QMessageBox.Yes | QMessageBox.No)
+                if(confirm == QMessageBox.Yes):
+                    self.btn_cnl_sch.setEnabled(True)
+                    self.btn_schedule.setEnabled(False)
+                    self.thread.getdata(year, month, user, pwd, rec, chk_dld, '0', timer)
+                    self.thread.start()
+            else:
+                self.msgbox('error', '请输入邮箱地址!! ')
+
+    def cancel_schedule(self):
+        confirm = QMessageBox.question(self, "警告", "是否取消定时任务? ", QMessageBox.Yes | QMessageBox.No)
+        if(confirm == QMessageBox.Yes):
+            self.thread.stop_self()
+            self.Addmsg(f'{datetime.now()} - 定时任务已取消')
+            self.btn_cnl_sch.setEnabled(False)
+            self.btn_schedule.setEnabled(True)
+           
+
     def execute_once(self):
         year = str(self.cb_year.currentText())
         month = str(self.cb_month.currentText())
