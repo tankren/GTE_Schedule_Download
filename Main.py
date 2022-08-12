@@ -10,11 +10,9 @@ vK8FXz+w~UxHR2L
 
 
 import sys
-import time
-from datetime import datetime
-from tokenize import Triple
+from datetime import datetime, timedelta
 from PySide6.QtWidgets import *
-from PySide6.QtGui import QFont, QAction
+from PySide6.QtGui import QFont
 from PySide6.QtCore import Slot, Qt, QThread, Signal, QEvent
 import requests
 import smtplib
@@ -24,7 +22,7 @@ from email.mime.application import MIMEApplication
 import re
 import os
 from lxml import etree
-import schedule
+from apscheduler.schedulers.background import BackgroundScheduler 
 
 class Worker(QThread):
   sinOut = Signal(str)
@@ -40,7 +38,7 @@ class Worker(QThread):
 
   def stop_self(self):
         self.terminate()
-        message = f'{datetime.now()} - 进程已终止...'
+        message = f'进程已终止...'
         self.sinOut.emit(message)
         
   def getdata(self, year, month, user, pwd, rec, chk_dld, once, timer):
@@ -80,7 +78,7 @@ class Worker(QThread):
         email.attach(part)
     #dynamic email content
     if not file_list:
-        message = f'{datetime.now()} - 没有新的内示...'
+        message = f'没有新的内示...'
         self.sinOut.emit(message)
         email_content = f"Dear all,\n\tGTE {self.ym} 没有新的内示, 请知悉! \n\nVHCN ICO"
     else:
@@ -97,10 +95,10 @@ class Worker(QThread):
             sender,receivers.split(';'),email.as_string()) 
         #退出
         smtpObj.quit() 
-        message = f'{datetime.now()} - 邮件发送成功...'
+        message = f'邮件发送成功...'
         self.sinOut.emit(message)
     except smtplib.SMTPException as e:
-        message = f'{datetime.now()} - {e}'
+        message = f'{e}'
         self.sinOut.emit(message)
 
   def to_unicode(self, supplier):
@@ -132,39 +130,62 @@ class Worker(QThread):
         xml = etree.fromstring(self.resp_str)
         for filenm in xml.iter('{*}FileNm'):
             try:
-                message =   f'{datetime.now()} - 命中: {filenm.text}' 
+                message =   f'命中: {filenm.text}' 
                 self.sinOut.emit(message)
                 for ancestor in filenm.iterancestors('{*}IPO0704DTO'):
                     plant = [ancestor.find('./{*}Series').text, ancestor.find('./{*}VersionNum').text]
                     dld_path = f'http://192.168.10.33/GTESGFile/Inshow/{self.ym}/{plant[0]}/{self.user[0:5]}/{filenm.text}'
                     #e.g.: http://192.168.10.33/GTESGFile/Inshow/202208/M1/3334A/XXXX.xls
-                    message = f'{datetime.now()} - 下载Excel {filenm.text}'
+                    message = f'下载Excel {filenm.text}'
                     self.sinOut.emit(message)
                     self.filepath = f'{self.folder}\\{filenm.text}'
                     dld_xls = requests.get(url=dld_path,stream=True)
                     with open(self.filepath,"wb") as xls:
                         xls.write(dld_xls.content)
-                    message =   f'{datetime.now()} - 下载完成! '
+                    message =   f'下载完成! '
                     self.sinOut.emit(message)           
 
             except Exception as e:
-                message = f'{datetime.now()} - {e}'
+                message = f'{e}'
                 self.sinOut.emit(message)
   def chain(self):
-    message = f'{datetime.now()} - 获取Excel文件清单...'
+    message = f'获取Excel文件清单...'
     self.sinOut.emit(message)
     self.post_download()
-    message = f'{datetime.now()} - 获取结束, 发送邮件...'
+    message = f'获取结束, 发送邮件...'
     self.sinOut.emit(message)
     self.send_mail()
-    message = f'{datetime.now()} - 正在结束进程...'
+    message = f'正在结束进程...'
     self.sinOut.emit(message)
     self.quit() 
   
-  def tell_time(self):
-    now = datetime.now()
-    ts = now.strftime('%Y-%m-%d %H:%M:%S')
-    self.sinOut.emit(f'当前时间为{ts}')    
+  def stop_scheduler(self):
+        message = f'正在终止计划任务...'
+        self.sinOut.emit(message)
+        self.scheduler.shutdown()
+
+  def time_gap(self):
+        now= datetime.now()
+        now_hm = now.strftime('%H:%M')
+        now_d = now.strftime('%Y-%m-%d')
+        now_dhm = now.strftime('%Y-%m-%d %H:%M')
+        #sch_hm =input('输入时间(格式09:00): ')
+        sch_hm = self.timer
+        if now_hm < sch_hm:    
+            self.sch_dhm = f'{now_d} {sch_hm}'
+            
+            gap = str(datetime.strptime(self.sch_dhm, '%Y-%m-%d %H:%M') - datetime.strptime(now_dhm, '%Y-%m-%d %H:%M'))
+            self.gap_h = gap.split(':')[0]
+            self.gap_m = gap.split(':')[1]
+        else:
+            sch_d = datetime.strftime((now + timedelta(days=1)), '%Y-%m-%d')
+            self.sch_dhm = f'{sch_d} {sch_hm}'
+            print(self.sch_dhm)
+            message = f'下次任务时间为: {self.sch_dhm}'
+            self.sinOut.emit(message)
+            gap = str(datetime.strptime(self.sch_dhm, '%Y-%m-%d %H:%M') - datetime.strptime(now_dhm, '%Y-%m-%d %H:%M'))
+            self.gap_h = gap.split(':')[0]
+            self.gap_m = gap.split(':')[1]
 
   def run(self):
     #主逻辑
@@ -172,20 +193,27 @@ class Worker(QThread):
         try:
             self.chain()
         except Exception as e:
-            message = f'{datetime.now()} - {e}'
+            message = f'{e}'
             self.sinOut.emit(message)
             self.quit()
     else:
         try:
-            message = f'{datetime.now()} - 已设置定时任务...每天{self.timer}'  
+            self.time_gap()
+            message = f'已设置定时任务为每天{self.timer} '  
             self.sinOut.emit(message)
-            schedule.every().day.at(self.timer).do(self.chain)
-            #schedule.every().hour.do(self.tell_time)
-            while True:
-                schedule.run_pending()
-                time.sleep(1)     
+            message = f'下次任务时间为: {self.sch_dhm}, 距现在{self.gap_h}小时{self.gap_m}分'
+            self.sinOut.emit(message)
+            self.scheduler = BackgroundScheduler()
+            
+            self.scheduler.add_job(
+                self.chain,
+                trigger='cron',
+                hour=self.timer[0:2]
+            )
+            self.scheduler.start()
+
         except Exception as e:
-            message = f'{datetime.now()} - {e}'  
+            message = f'{e}'  
             self.sinOut.emit(message)
 
 class MyWidget(QWidget):
@@ -260,8 +288,10 @@ class MyWidget(QWidget):
         
         self.btn_reset = QPushButton('清空日志')
         self.btn_reset.clicked.connect(self.reset_log)
-        self.btn_stop = QPushButton('终止进程')
+        self.btn_stop = QPushButton('终止任务进程')
+        self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_thread)
+
 
         self.layout = QGridLayout()
         self.layout.addWidget((self.fld_user), 0, 0)
@@ -282,11 +312,11 @@ class MyWidget(QWidget):
         self.layout.addWidget((self.line), 2, 0, 1, 8)
         self.layout.addWidget((self.fld_result), 3, 0)
         self.layout.addWidget((self.text_result), 4, 0, 6, 6)
-        self.layout.addWidget((self.btn_start), 5, 6, 1, 2)
-        self.layout.addWidget((self.btn_schedule), 6, 6, 1, 2)
-        self.layout.addWidget((self.btn_cnl_sch), 7, 6, 1, 2)
-        self.layout.addWidget((self.btn_reset), 8, 6, 1, 2)
-        self.layout.addWidget((self.btn_stop), 9, 6, 1, 2)
+        self.layout.addWidget((self.btn_start), 6, 6, 1, 2)
+        self.layout.addWidget((self.btn_schedule), 8, 6, 1, 2)
+        self.layout.addWidget((self.btn_cnl_sch), 9, 6, 1, 2)
+        self.layout.addWidget((self.btn_reset), 4, 6, 1, 2)
+        self.layout.addWidget((self.btn_stop), 7, 6, 1, 2)
 
         self.setLayout(self.layout)
         
@@ -331,6 +361,7 @@ class MyWidget(QWidget):
         confirm = QMessageBox.question(self, "警告", "是否终止进程? ", QMessageBox.Yes | QMessageBox.No)
         if(confirm == QMessageBox.Yes):
             self.thread.stop_self()
+            self.btn_stop.setEnabled(False)
 
     def get_year_month(self):
         year = str(self.cb_year.currentText())
@@ -367,8 +398,8 @@ class MyWidget(QWidget):
     def cancel_schedule(self):
         confirm = QMessageBox.question(self, "警告", "是否取消定时任务? ", QMessageBox.Yes | QMessageBox.No)
         if(confirm == QMessageBox.Yes):
-            self.thread.stop_self()
-            self.Addmsg(f'{datetime.now()} - 定时任务已取消')
+            self.thread.stop_scheduler()
+            self.Addmsg(f'定时任务已取消')
             self.btn_cnl_sch.setEnabled(False)
             self.btn_schedule.setEnabled(True)
            
@@ -387,7 +418,8 @@ class MyWidget(QWidget):
             self.msgbox('error', '请输入用户名和密码!! ')
         else:
             if not rec == '':
-                self.thread.getdata(year, month, user, pwd, rec, chk_dld, '1')
+                self.btn_stop.setEnabled(True)
+                self.thread.getdata(year, month, user, pwd, rec, chk_dld, '1', '')
                 self.thread.start()
             else:
                 self.msgbox('error', '请输入邮箱地址!! ')
