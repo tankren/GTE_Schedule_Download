@@ -29,13 +29,18 @@ class Worker(QThread):
 
   def __init__(self, parent=None):
     super(Worker, self).__init__(parent)
+    self.folder = 'c:\\temp\\GTE'
+    if os.path.exists(self.folder):
+        for xls in os.listdir(self.folder):
+            os.remove(f'{self.folder}\\{xls}')
+    else:
+        os.makedirs(self.folder)
 
   def stop_self(self):
         self.terminate()
         message = f'{datetime.now()} - 进程已终止...'
         self.sinOut.emit(message)
         
-
   def getdata(self, year, month, user, pwd, rec, chk_dld, once):
     self.year = year
     self.month = month
@@ -56,21 +61,30 @@ class Worker(QThread):
     #设置email信息
     #邮件内容设置
     email = MIMEMultipart()
-    email_content = "Dear all,\n\t附件为每周数据，请查收！\n\nBI团队"
-    email.attach(MIMEText('email_content ', 'plain', 'utf-8'))
     #邮件主题  
     time = datetime.now().isoformat(' ', 'seconds')
-    email['Subject'] = f'no-reply: {time} GTE内示下载结果' 
+    email['Subject'] = f'no-reply: {time} GTE内示自动下载结果' 
     #发送方信息
     email['From'] = sender 
     #接受方信息     
     email['To'] = receivers
-    folder = 'c:\\temp'
-    file_list = [f for f in os.listdir(folder) if f.endswith('.xlsx')]
+
+    #add attachments
+    file_list = [f for f in os.listdir(self.folder) if f.endswith('.xls')]
     for file in file_list:
-        part = MIMEApplication(open(f'{folder}\\{file}', 'rb').read())
+        part = MIMEApplication(open(f'{self.folder}\\{file}', 'rb').read())
         part.add_header('Content-Disposition', 'attachment', filename=file)
         email.attach(part)
+    #dynamic email content
+    if not file_list:
+        message = f'{datetime.now()} - 没有新的内示...'
+        self.sinOut.emit(message)
+        email_content = f"Dear all,\n\tGTE {self.ym} 没有新的内示, 请知悉! \n\nVHCN ICO"
+    else:
+        email_content = f"Dear all,\n\t附件为GTE {self.ym} 内示, 请查收! \n\nVHCN ICO"
+    #insert content    
+    email.attach(MIMEText(email_content, 'plain', 'utf-8'))
+
     try:
         smtpObj = smtplib.SMTP_SSL(mail_host, 465)
         #登录到服务器
@@ -83,19 +97,21 @@ class Worker(QThread):
         message = f'{datetime.now()} - 邮件发送成功...'
         self.sinOut.emit(message)
     except smtplib.SMTPException as e:
-        print('错误',e) #打印错误
+        message = f'{datetime.now()} - {e}'
+        self.sinOut.emit(message)
 
   def to_unicode(self, supplier):
     ret = ''
     for v in supplier:
-        ret = ret + hex(ord(v)).upper().replace('0X', '\\u')
+        ret = ret + hex(ord(v)).upper().replace('0X', '\\\\u')
 
     return ret
 
-  def POST(self):
+  def post_download(self):
         supplier = self.to_unicode(self.user[0:5])
-        ym = self.year+self.month
-        url = 'http://192.168.10.33/slcontainer/web.csv'
+        self.ym = self.year+self.month
+        url = 'http://192.168.10.33/WCFService/WcfService.svc'
+        headers = {'content-type': "text/xml", 'Referer': 'http://192.168.10.33/ClientBin/SilverlightUI.xap', 'SOAPAction': '"SysManager/WcfService/IPO0704GetInfo"'}
         body = '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">' \
                     '<s:Body>' \
                     '<IPO0704GetInfo xmlns="SysManager">' \
@@ -103,19 +119,34 @@ class Worker(QThread):
                     '<d4p1:pageIndex>1</d4p1:pageIndex>' \
                     '<d4p1:pageSize>10</d4p1:pageSize>' \
                     '</pagerinfo>' \
-                    f'<parm>{{"SupplierNum":"{supplier}","InshowYM":"{ym}","Check":"{self.chk_dld}"}}</parm>' \
+                    f'<parm>{{"SupplierNum":"{supplier}","InshowYM":"{self.ym}","Check":"{self.chk_dld}"}}</parm>' \
                     '</IPO0704GetInfo>' \
                     '</s:Body>' \
-                    '</s:Envelope>' 
-        print(body.encode("utf-8"))            
-        self.response= requests.post(url, data=body.encode("utf-8"))
-        #response = '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><IPO0704GetInfoResponse xmlns="SysManager"><IPO0704GetInfoResult xmlns:a="http://schemas.datacontract.org/2004/07/Silverlight.Server._07ElectronPlat" xmlns:i="http://www.w3.org/2001/XMLSchema-instance"><a:IPO0704DTO><a:FileNm>202207M13334A无锡博世04.xls</a:FileNm><a:InshowApproveTime>2022-07-19 16:03</a:InshowApproveTime><a:InshowDownLoadTime>2022-07-19 16:31</a:InshowDownLoadTime><a:InshowYM>2022-07</a:InshowYM><a:Series>M1</a:Series><a:VersionNum>4</a:VersionNum></a:IPO0704DTO><a:IPO0704DTO><a:FileNm>202207M13334A无锡博世03.xls</a:FileNm><a:InshowApproveTime>2022-07-10 15:58</a:InshowApproveTime><a:InshowDownLoadTime>2022-07-10 18:09</a:InshowDownLoadTime><a:InshowYM>2022-07</a:InshowYM><a:Series>M1</a:Series><a:VersionNum>3</a:VersionNum></a:IPO0704DTO><a:IPO0704DTO><a:FileNm>202207M23334A无锡博世03.xls</a:FileNm><a:InshowApproveTime>2022-07-19 16:06</a:InshowApproveTime><a:InshowDownLoadTime>2022-07-19 16:31</a:InshowDownLoadTime><a:InshowYM>2022-07</a:InshowYM><a:Series>M2</a:Series><a:VersionNum>3</a:VersionNum></a:IPO0704DTO><a:IPO0704DTO><a:FileNm>202207M13334A无锡博世02.xls</a:FileNm><a:InshowApproveTime>2022-07-02 15:52</a:InshowApproveTime><a:InshowDownLoadTime>2022-07-04 09:50</a:InshowDownLoadTime><a:InshowYM>2022-07</a:InshowYM><a:Series>M1</a:Series><a:VersionNum>2</a:VersionNum></a:IPO0704DTO><a:IPO0704DTO><a:FileNm>202207M23334A无锡博世02.xls</a:FileNm><a:InshowApproveTime>2022-07-10 16:02</a:InshowApproveTime><a:InshowDownLoadTime>2022-07-10 18:09</a:InshowDownLoadTime><a:InshowYM>2022-07</a:InshowYM><a:Series>M2</a:Series><a:VersionNum>2</a:VersionNum></a:IPO0704DTO><a:IPO0704DTO><a:FileNm>202207M13334A无锡博世01.xls</a:FileNm><a:InshowApproveTime>2022-06-27 15:56</a:InshowApproveTime><a:InshowDownLoadTime>2022-06-27 17:44</a:InshowDownLoadTime><a:InshowYM>2022-07</a:InshowYM><a:Series>M1</a:Series><a:VersionNum>1</a:VersionNum></a:IPO0704DTO><a:IPO0704DTO><a:FileNm>202207M23334A无锡博世01.xls</a:FileNm><a:InshowApproveTime>2022-06-27 15:58</a:InshowApproveTime><a:InshowDownLoadTime>2022-06-27 17:44</a:InshowDownLoadTime><a:InshowYM>2022-07</a:InshowYM><a:Series>M2</a:Series><a:VersionNum>1</a:VersionNum></a:IPO0704DTO></IPO0704GetInfoResult><intResultCount>7</intResultCount></IPO0704GetInfoResponse></s:Body></s:Envelope>'
+                    '</s:Envelope>'        
 
+        self.response= requests.post(url, data=body, headers=headers)
+        self.resp_str = str(self.response.content.decode('utf8'))
+        xml = etree.fromstring(self.resp_str)
+        for filenm in xml.iter('{*}FileNm'):
+            try:
+                message =   f'{datetime.now()} - 命中: {filenm.text}' 
+                self.sinOut.emit(message)
+                for ancestor in filenm.iterancestors('{*}IPO0704DTO'):
+                    plant = [ancestor.find('./{*}Series').text, ancestor.find('./{*}VersionNum').text]
+                    dld_path = f'http://192.168.10.33/GTESGFile/Inshow/{self.ym}/{plant[0]}/{self.user[0:5]}/{filenm.text}'
+                    #e.g.: http://192.168.10.33/GTESGFile/Inshow/202208/M1/3334A/XXXX.xls
+                    message = f'{datetime.now()} - 下载Excel {filenm.text}'
+                    self.sinOut.emit(message)
+                    self.filepath = f'{self.folder}\\{filenm.text}'
+                    dld_xls = requests.get(url=dld_path,stream=True)
+                    with open(self.filepath,"wb") as xls:
+                        xls.write(dld_xls.content)
+                    message =   f'{datetime.now()} - 下载完成! '
+                    self.sinOut.emit(message)           
 
-  def download(self):
-        xml = etree.fromstring(self.response)
-        for node in xml.iter('{*}FileNm', '{*}Series', '{*}VersionNum'):
-            print(node.text)    
+            except Exception as e:
+                message = f'{datetime.now()} - {e}'
+                self.sinOut.emit(message)
 
   def run(self):
     #主逻辑
@@ -123,13 +154,12 @@ class Worker(QThread):
         try:
             message = f'{datetime.now()} - 获取Excel文件清单...'
             self.sinOut.emit(message)
-
-            self.POST()
+            self.post_download()
             message = f'{datetime.now()} - 获取结束, 发送邮件...'
             self.sinOut.emit(message)
             self.send_mail()
         except Exception as e:
-            message = f'{datetime.now()} - {e} '
+            message = f'{datetime.now()} - {e}'
             self.sinOut.emit(message)
     else:
         try:
@@ -189,7 +219,7 @@ class MyWidget(QWidget):
         self.line_email = QLineEdit()
         self.line_email.setClearButtonEnabled(True)
         self.line_email.setPlaceholderText("多个收件人之间用分号;分开") 
-        self.line_email.setText("tankren@qq.com;tankrenlive@gmail.com")  ##测试
+        self.line_email.setText("chenlong.ren@cn.bosch.com;feng.he@cn.bosch.com")  ##测试
         self.line_email.editingFinished.connect(self.check_email)
         
         self.fld_result = QLabel('运行日志:')
