@@ -1,0 +1,1 @@
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><IPO0704GetInfoResponse xmlns="SysManager"><IPO0704GetInfoResult xmlns:a="http://schemas.datacontract.org/2004/07/Silverlight.Server._07ElectronPlat" xmlns:i="http://www.w3.org/2001/XMLSchema-instance"/><intResultCount>0</intResultCount></IPO0704GetInfoResponse></s:Body></s:Envelope>
