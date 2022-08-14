@@ -21,6 +21,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 import re
 import os
+import qdarktheme
 from lxml import etree
 from apscheduler.schedulers.background import BlockingScheduler, BackgroundScheduler
 
@@ -182,19 +183,38 @@ class Worker(QThread):
         now_d = now.strftime('%Y-%m-%d')
         now_dhm = now.strftime('%Y-%m-%d %H:%M')
         #sch_hm =input('输入时间(格式09:00): ')
-        sch_hm = self.timer
-        if now_hm < sch_hm:    
-            self.sch_dhm = f'{now_d} {sch_hm}'
-            
-            gap = str(datetime.strptime(self.sch_dhm, '%Y-%m-%d %H:%M') - datetime.strptime(now_dhm, '%Y-%m-%d %H:%M'))
-            self.gap_h = gap.split(':')[0]
-            self.gap_m = gap.split(':')[1]
+        if now.weekday() == 4:
+            delta = 3
+        elif now.weekday() == 5:
+            delta = 2
         else:
-            sch_d = datetime.strftime((now + timedelta(days=1)), '%Y-%m-%d')
-            self.sch_dhm = f'{sch_d} {sch_hm}'
-            gap = str(datetime.strptime(self.sch_dhm, '%Y-%m-%d %H:%M') - datetime.strptime(now_dhm, '%Y-%m-%d %H:%M'))
-            self.gap_h = gap.split(':')[0]
-            self.gap_m = gap.split(':')[1]
+            delta =1
+        sch_hm = self.timer
+        if self.chk_workday == '5':
+            if now_hm < sch_hm:    
+                self.sch_dhm = f'{now_d} {sch_hm}'            
+                gap = str(datetime.strptime(self.sch_dhm, '%Y-%m-%d %H:%M') - datetime.strptime(now_dhm, '%Y-%m-%d %H:%M'))
+                self.gap_h = gap.split(':')[0]
+                self.gap_m = gap.split(':')[1]
+            else: 
+                sch_d = datetime.strftime((now + timedelta(days=delta)), '%Y-%m-%d')
+                self.sch_dhm = f'{sch_d} {sch_hm}'
+                gap = str(datetime.strptime(self.sch_dhm, '%Y-%m-%d %H:%M') - datetime.strptime(now_dhm, '%Y-%m-%d %H:%M'))
+                self.gap_d = gap[0]
+                self.gap_h = int(gap[7:9]) + 24 * int(self.gap_d)
+                self.gap_m = gap.split(':')[1]          
+        else:
+            if now_hm < sch_hm:    
+                self.sch_dhm = f'{now_d} {sch_hm}'            
+                gap = str(datetime.strptime(self.sch_dhm, '%Y-%m-%d %H:%M') - datetime.strptime(now_dhm, '%Y-%m-%d %H:%M'))
+                self.gap_h = gap.split(':')[0]
+                self.gap_m = gap.split(':')[1]
+            else: 
+                sch_d = datetime.strftime((now + timedelta(days=delta)), '%Y-%m-%d')
+                self.sch_dhm = f'{sch_d} {sch_hm}'
+                gap = str(datetime.strptime(self.sch_dhm, '%Y-%m-%d %H:%M') - datetime.strptime(now_dhm, '%Y-%m-%d %H:%M'))
+                self.gap_h = gap.split(':')[0]
+                self.gap_m = gap.split(':')[1]  
 
   def run(self):
     #主逻辑
@@ -205,8 +225,7 @@ class Worker(QThread):
             message = f'{e}'
             self.sinOut.emit(message)
     else:
-        try:
-            self.time_gap()
+        try:            
             self.scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
             h = self.timer[0:2]
             m = self.timer[3:5]
@@ -229,7 +248,7 @@ class Worker(QThread):
                 else:
                     message = f'已设置定时任务为每个工作日的{self.timer} '   
                 self.sinOut.emit(message)
-
+                self.time_gap()    
                 message = f'下次任务时间为: {self.sch_dhm}, 距现在{self.gap_h}小时{self.gap_m}分'
                 self.sinOut.emit(message)    
             except Exception as e:
@@ -489,13 +508,14 @@ def main():
         app = QApplication(sys.argv)
     else:
         app = QApplication.instance()
-    #app.setStyleSheet(qdarktheme.load_stylesheet(border="rounded"))
-    app.setStyle("fusion")
     font = QFont()
     font.setFamily("Microsoft YaHei")
     font.setPointSize(10)
     app.setFont(font)
     widget = MyWidget()
+    #app.setStyleSheet(qdarktheme.load_stylesheet(border="rounded"))
+    #app.setStyle("fusion")
+    
     widget.show()
     sys.exit(app.exec())
 
