@@ -161,8 +161,12 @@ class Worker(QThread):
   def chain(self):
     try:
         if self.once == '0':
-                message = f'{datetime.now()} - 开始运行定时任务...'
-                self.sinOut.emit(message)
+            message = f'{datetime.now()} - 开始运行定时任务...'
+            self.sinOut.emit(message)
+        else:
+            message = f'{datetime.now()} - 开始运行单次任务...'
+            self.sinOut.emit(message)            
+
         message = f'获取Excel文件清单...'
         self.sinOut.emit(message)
         self.post_download()
@@ -170,11 +174,14 @@ class Worker(QThread):
         self.sinOut.emit(message)
         self.send_mail()
         if self.once == '0':
-                message = f'{datetime.now()} - 定时任务已完成...'
-                self.sinOut.emit(message)  
-                self.time_gap()    
-                message = f'下次任务时间为: {self.sch_dhm}, 距现在{self.gap_h}小时{self.gap_m}分'
-                self.sinOut.emit(message)    
+            message = f'{datetime.now()} - 定时任务已完成! '
+            self.sinOut.emit(message)  
+            self.time_gap()    
+            message = f'下次任务时间为: {self.sch_dhm}, 距现在{self.gap_h}小时{self.gap_m}分'
+            self.sinOut.emit(message)
+        else:
+            message = f'{datetime.now()} - 单次任务已完成! '
+            self.sinOut.emit(message)  
 
     except Exception as e:
         message = f'{e}'
@@ -279,7 +286,7 @@ class MyWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.thread = Worker()
-        title = f'GTE内示查询下载工具 v0.1   - Made by REC3WX'
+        title = f'GTE内示查询下载工具 v1.0   - Made by REC3WX'
         self.setWindowTitle(title)
         pixmapi = QStyle.SP_FileDialogDetailedView
         icon = self.style().standardIcon(pixmapi)
@@ -315,6 +322,11 @@ class MyWidget(QWidget):
         self.cb_month.setCurrentText(str(m))
         self.cb_month.currentTextChanged[str].connect(self.get_year_month)
 
+
+        self.calendar = QDateEdit()
+        self.calendar.setCursor(Qt.PointingHandCursor)
+        self.calendar.setDisplayFormat('yyyy-MM')
+
         self.chk_dld = QCheckBox('包含已下载', self)
         self.chk_workday = QCheckBox('仅工作日', self)
 
@@ -324,6 +336,7 @@ class MyWidget(QWidget):
         self.fld_sch = QLabel('定时任务时间:')
         self.time_sch = QTimeEdit()
         self.time_sch.setDisplayFormat("HH:mm")
+        self.time_sch.setCursor(Qt.PointingHandCursor)
         
         self.fld_email = QLabel('收件人:')
         self.line_email = QLineEdit()
@@ -430,7 +443,7 @@ class MyWidget(QWidget):
     def get_year_month(self):
         year = str(self.cb_year.currentText())
         month = str(self.cb_month.currentText())
-        title = 'GTE内示查询下载工具 v0.1   - Made by REC3WX'
+        title = 'GTE内示查询下载工具 v1.0   - Made by REC3WX'
         if not year == '' and not month == '':
             #self.text_result.appendPlainText(f'当前选择的发票年月为: {year}年{month}月')
             self.setWindowTitle(f'{title} - 内示年月: {year}-{month}')
