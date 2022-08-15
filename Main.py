@@ -114,7 +114,7 @@ class Worker(QThread):
         self.ym = self.year+self.month
         url = 'http://192.168.10.33/WCFService/WcfService.svc'
         headers = {'content-type': "text/xml", 'Referer': 'http://192.168.10.33/ClientBin/SilverlightUI.xap', 'SOAPAction': '"SysManager/WcfService/IPO0704GetInfo"'}
-        if self.chk_dld == '1':
+        if self.chk_dld == '1' or self.once == '1':
             scope = f'<parm>{{"SupplierNum":"{supplier}","InshowYM":"{self.ym}","Check":"{self.chk_dld}"}}</parm>'
         else:
             scope = f'<parm>{{"SupplierNum":"{supplier}","Check":"{self.chk_dld}"}}</parm>'
