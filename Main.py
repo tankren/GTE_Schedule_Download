@@ -19,6 +19,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+from email.utils import formataddr
 import re
 import os
 import qdarktheme
@@ -68,7 +69,7 @@ class Worker(QThread):
     time = datetime.now().isoformat(' ', 'seconds')
     email['Subject'] = f'no-reply: {time} GTE内示自动下载结果' 
     #发送方信息
-    email['From'] = sender 
+    email['From'] = formataddr(['Mail Bot@VHCN', sender])   
     #接受方信息     
     email['To'] = receivers
 
@@ -80,8 +81,6 @@ class Worker(QThread):
         email.attach(part)
     #dynamic email content
     if not file_list:
-        message = f'没有新的内示...'
-        self.sinOut.emit(message)
         email_content = f"Dear all,\n\tGTE {self.ym} 没有新的内示, 请知悉! \n\nVHCN ICO"
     else:
         email_content = f"Dear all,\n\t附件为GTE {self.ym} 内示, 请查收! \n\nVHCN ICO"
@@ -115,6 +114,11 @@ class Worker(QThread):
         self.ym = self.year+self.month
         url = 'http://192.168.10.33/WCFService/WcfService.svc'
         headers = {'content-type': "text/xml", 'Referer': 'http://192.168.10.33/ClientBin/SilverlightUI.xap', 'SOAPAction': '"SysManager/WcfService/IPO0704GetInfo"'}
+        if self.chk_dld == '1':
+            scope = f'<parm>{{"SupplierNum":"{supplier}","InshowYM":"{self.ym}","Check":"{self.chk_dld}"}}</parm>'
+        else:
+            scope = f'<parm>{{"SupplierNum":"{supplier}","Check":"{self.chk_dld}"}}</parm>'
+            
         body = '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">' \
                     '<s:Body>' \
                     '<IPO0704GetInfo xmlns="SysManager">' \
@@ -122,7 +126,7 @@ class Worker(QThread):
                     '<d4p1:pageIndex>1</d4p1:pageIndex>' \
                     '<d4p1:pageSize>10</d4p1:pageSize>' \
                     '</pagerinfo>' \
-                    f'<parm>{{"SupplierNum":"{supplier}","InshowYM":"{self.ym}","Check":"{self.chk_dld}"}}</parm>' \
+                    f'{scope}' \
                     '</IPO0704GetInfo>' \
                     '</s:Body>' \
                     '</s:Envelope>'        
@@ -132,7 +136,7 @@ class Worker(QThread):
         xml = etree.fromstring(self.resp_str)
         for filenm in xml.iter('{*}FileNm'):
             try:
-                message =   f'命中: {filenm.text}' 
+                message = f'命中: {filenm.text}' 
                 self.sinOut.emit(message)
                 for ancestor in filenm.iterancestors('{*}IPO0704DTO'):
                     plant = [ancestor.find('./{*}Series').text, ancestor.find('./{*}VersionNum').text]
@@ -144,12 +148,15 @@ class Worker(QThread):
                     dld_xls = requests.get(url=dld_path,stream=True)
                     with open(self.filepath,"wb") as xls:
                         xls.write(dld_xls.content)
-                    message =   f'下载完成! '
+                    message = f'下载完成! '
                     self.sinOut.emit(message)           
-
+            
             except Exception as e:
                 message = f'{e}'
                 self.sinOut.emit(message)
+        else:
+            message = f'没有找到新的内示...'
+            self.sinOut.emit(message)        
 
   def chain(self):
     try:
@@ -162,8 +169,13 @@ class Worker(QThread):
         message = f'获取结束, 发送邮件...'
         self.sinOut.emit(message)
         self.send_mail()
-        message = f'正在结束进程...'
-        self.sinOut.emit(message)
+        if self.once == '0':
+                message = f'{datetime.now()} - 定时任务已完成...'
+                self.sinOut.emit(message)  
+                self.time_gap()    
+                message = f'下次任务时间为: {self.sch_dhm}, 距现在{self.gap_h}小时{self.gap_m}分'
+                self.sinOut.emit(message)    
+
     except Exception as e:
         message = f'{e}'
         self.sinOut.emit(message)    
@@ -188,7 +200,7 @@ class Worker(QThread):
         elif now.weekday() == 5:
             delta = 2
         else:
-            delta =1
+            delta = 1
         sch_hm = self.timer
         if self.chk_workday == '5':
             if now_hm < sch_hm:    
@@ -200,9 +212,12 @@ class Worker(QThread):
                 sch_d = datetime.strftime((now + timedelta(days=delta)), '%Y-%m-%d')
                 self.sch_dhm = f'{sch_d} {sch_hm}'
                 gap = str(datetime.strptime(self.sch_dhm, '%Y-%m-%d %H:%M') - datetime.strptime(now_dhm, '%Y-%m-%d %H:%M'))
-                self.gap_d = gap[0]
-                self.gap_h = int(gap[7:9]) + 24 * int(self.gap_d)
-                self.gap_m = gap.split(':')[1]          
+                if 'day' in str(gap):
+                    self.gap_d = gap[0]
+                    self.gap_h = int(gap.split(':')[0][-2:]) + 24 * int(self.gap_d)
+                else:    
+                    self.gap_h = int(gap.split(':')[0])    
+                self.gap_m = gap.split(':')[1] 
         else:
             if now_hm < sch_hm:    
                 self.sch_dhm = f'{now_d} {sch_hm}'            
@@ -300,7 +315,7 @@ class MyWidget(QWidget):
         self.cb_month.setCurrentText(str(m))
         self.cb_month.currentTextChanged[str].connect(self.get_year_month)
 
-        self.chk_dld = QCheckBox('考虑已下载', self)
+        self.chk_dld = QCheckBox('包含已下载', self)
         self.chk_workday = QCheckBox('仅工作日', self)
 
         self.btn_start = QPushButton('运行单次任务')
@@ -514,7 +529,7 @@ def main():
     app.setFont(font)
     widget = MyWidget()
     #app.setStyleSheet(qdarktheme.load_stylesheet(border="rounded"))
-    #app.setStyle("fusion")
+    app.setStyle("fusion")
     
     widget.show()
     sys.exit(app.exec())
