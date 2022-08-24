@@ -107,7 +107,7 @@ class Worker(QThread):
             </td>
           </tr>  
           <tr>
-            <td bgcolor="#bfc0c2" style="padding: 30px 20px 30px 20px;">
+            <td bgcolor="#ffffff" style="padding: 30px 20px 30px 20px;">
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse;">
                 <tr>
                   <td align="center" style="color: #000000; font-family: Microsoft YaHei;">
@@ -162,7 +162,7 @@ class Worker(QThread):
             </td>
           </tr>  
           <tr>
-            <td bgcolor="#bfc0c2" style="padding: 30px 20px 30px 20px;">
+            <td bgcolor="#ffffff" style="padding: 30px 20px 30px 20px;">
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse;">
                 <tr>
                   <td align="center" style="color: #000000; font-family: Microsoft YaHei;">
