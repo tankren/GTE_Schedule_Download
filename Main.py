@@ -86,11 +86,117 @@ class Worker(QThread):
             self.sinOut.emit(message)
             return
         elif not file_list:
-            email_content = f"Dear all,\n\tGTE {self.ym} 没有新的内示, 请知悉! \n\nVHCN ICO"
+            #email_content = f"Dear all,\n\tGTE {self.ym} 没有新的内示, 请知悉! \n\nVHCN ICO"
+            email_content = """\
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>GTE内示自动下载结果</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+</head>
+
+<body style="margin: 0; padding: 0;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+    <tr>
+      <td style="padding: 20px 0 30px 0;">
+
+        <table align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="border-collapse: collapse; border: 1px solid #cccccc;">
+          <tr>
+            <td align="center" bgcolor="#005691" style="padding: 20px 0 20px 0;">
+                <h1 style="color: #ffffff; font-size: 24px; margin: 0;  font-family: Microsoft YaHei;">GTE内示自动下载结果</h1>
+            </td>
+          </tr>  
+          <tr>
+            <td bgcolor="#bfc0c2" style="padding: 30px 20px 30px 20px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse;">
+                <tr>
+                  <td align="center" style="color: #000000; font-family: Microsoft YaHei;">
+                    <p style="margin: 0;">没有新的内示, 请知悉! </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="#005691" style="padding: 10px 10px;">
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse;">
+                <tr>
+                  <td align="center" style="color: #00000; font-family: Microsoft YaHei; font-size: 14px;">
+                    <p style="color: #ffffff; margin: 0;">Powered by VHCN ICO</p>
+                  </td>
+                  <td align="right">
+                    <table border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""                
         else:
-            email_content = f"Dear all,\n\t附件为GTE {self.ym} 内示, 请查收! \n\nVHCN ICO"
+            pass
+            email_content = """ \
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <title>GTE内示自动下载结果</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+</head>
+
+<body style="margin: 0; padding: 0;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+    <tr>
+      <td style="padding: 20px 0 30px 0;">
+
+        <table align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="border-collapse: collapse; border: 1px solid #cccccc;">
+          <tr>
+            <td align="center" bgcolor="#005691" style="padding: 20px 0 20px 0;">
+                <h1 style="color: #ffffff; font-size: 24px; margin: 0;  font-family: Microsoft YaHei;">GTE内示自动下载结果</h1>
+            </td>
+          </tr>  
+          <tr>
+            <td bgcolor="#bfc0c2" style="padding: 30px 20px 30px 20px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse;">
+                <tr>
+                  <td align="center" style="color: #000000; font-family: Microsoft YaHei;">
+                    <p style="margin: 0;">附件为新的内示, 请查收! </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="#005691" style="padding: 10px 10px;">
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse;">
+                <tr>
+                  <td align="center" style="color: #00000; font-family: Microsoft YaHei; font-size: 14px;">
+                    <p style="color: #ffffff; margin: 0;">Powered by VHCN ICO</p>
+                  </td>
+                  <td align="right">
+                    <table border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
         # insert content
-        email.attach(MIMEText(email_content, "plain", "utf-8"))
+        email.attach(MIMEText(email_content, "html", "utf-8"))
 
         try:
             smtpObj = smtplib.SMTP_SSL(mail_host, 465)
