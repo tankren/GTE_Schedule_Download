@@ -34,8 +34,7 @@ class Worker(QThread):
         super(Worker, self).__init__(parent)
         self.folder = f"{tempfile.gettempdir()}\GET\Schedule"
         if os.path.exists(self.folder):
-            for xls in os.listdir(self.folder):
-                os.remove(f"{self.folder}\\{xls}")
+            self.purge_file()
         else:
             os.makedirs(self.folder)
 
@@ -43,6 +42,10 @@ class Worker(QThread):
         self.terminate()
         message = f"进程已终止..."
         self.sinOut.emit(message)
+
+    def purge_file(self):
+        for xls in os.listdir(self.folder):
+            os.remove(f"{self.folder}\\{xls}")
 
     def getdata(self, year, month, user, pwd, rec, chk_dld, once, timer, chk_workday):
         self.year = year
@@ -86,7 +89,7 @@ class Worker(QThread):
             self.sinOut.emit(message)
             return
         elif not file_list:
-            #email_content = f"Dear all,\n\tGTE {self.ym} 没有新的内示, 请知悉! \n\nVHCN ICO"
+            # email_content = f"Dear all,\n\tGTE {self.ym} 没有新的内示, 请知悉! \n\nVHCN ICO"
             email_content = """\
 <html>
 <head>
@@ -139,7 +142,7 @@ class Worker(QThread):
   </table>
 </body>
 </html>
-"""                
+"""
         else:
             pass
             email_content = """ \
@@ -296,6 +299,7 @@ class Worker(QThread):
             message = f"获取结束, 发送邮件..."
             self.sinOut.emit(message)
             self.send_mail()
+            self.purge_file()
             if self.once == "0":
                 message = f"{datetime.now()} - 定时任务已完成! "
                 self.sinOut.emit(message)
@@ -370,7 +374,11 @@ class Worker(QThread):
                     datetime.strptime(self.sch_dhm, "%Y-%m-%d %H:%M")
                     - datetime.strptime(now_dhm, "%Y-%m-%d %H:%M")
                 )
-                self.gap_h = gap.split(":")[0]
+                if "day" in str(gap):
+                    self.gap_d = gap[0]
+                    self.gap_h = int(gap.split(":")[0][-2:]) + 24 * int(self.gap_d)
+                else:
+                    self.gap_h = gap.split(":")[0]
                 self.gap_m = gap.split(":")[1]
 
     def run(self):
